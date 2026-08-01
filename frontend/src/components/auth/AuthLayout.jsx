@@ -3,10 +3,11 @@ export function AuthLayout({ title, subtitle, children }) {
     <div className="grid min-h-screen grid-cols-1 lg:grid-cols-2">
       <div className="hidden flex-col justify-between bg-ink px-12 py-14 text-paper lg:flex">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-6 items-center justify-center rounded-b-sm bg-brass text-[10px] font-bold text-surface">
-            LG
-          </span>
+          
           <span className="font-display text-lg font-semibold">SoulPages</span>
+          <span className="flex h-8 w-6 items-center justify-center rounded-b-sm bg-brass text-[10px] font-bold text-surface">
+            By - Kartik Gurve
+          </span>
         </div>
 
         <div className="max-w-sm">
