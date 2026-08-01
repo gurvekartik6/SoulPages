@@ -5,9 +5,9 @@ export function AuthLayout({ title, subtitle, children }) {
         <div className="flex items-center gap-2">
           
           <span className="font-display text-lg font-semibold">SoulPages</span>
-          <span className="flex h-8 w-6 items-center justify-center rounded-b-sm bg-brass text-[10px] font-bold text-surface">
-            By - Kartik Gurve
-          </span>
+          <div>
+            <h5>By Kartik Yadav Gurve</h5>
+          </div>
         </div>
 
         <div className="max-w-sm">
