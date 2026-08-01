@@ -21,6 +21,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 const isProd = process.env.NODE_ENV === 'production';
+const frontendUrl = process.env.CORS_ORIGIN || 'https://soulpages.up.railway.app';
 
 if (isProd && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16)) {
   console.error('❌ JWT_SECRET must be set to a long random string in production. Refusing to start.');
@@ -28,9 +29,34 @@ if (isProd && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16)) {
 }
 
 app.set('trust proxy', 1);
-app.use(helmet());
+
+// ✅ FIXED: Configure Helmet with proper CSP
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        connectSrc: [
+          "'self'",
+          frontendUrl,
+          'https://*.railway.app',
+          'https://*.fly.dev',
+          'http://localhost:5000'
+        ],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        fontSrc: ["'self'", "https:", "data:"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
 app.use(compression());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.use(cors({ origin: frontendUrl || '*' }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan(isProd ? 'combined' : 'dev'));
 
@@ -67,26 +93,21 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/quotes', quotesRoutes);
 
 // ============================================
-// ✅ ADD THIS: SERVE FRONTEND STATIC FILES
+// SERVE FRONTEND STATIC FILES
 // ============================================
 if (isProd) {
-  // Path to frontend build folder
   const frontendPath = path.join(__dirname, '../../frontend/dist');
-  console.log('📂 Serving frontend from:', frontendPath);
+  console.log('Serving frontend from:', frontendPath);
   
-  // Serve static files
   app.use(express.static(frontendPath));
   
-  // Handle SPA routing - serve index.html for all non-API routes
   app.get('*', (req, res) => {
-    // Don't interfere with API routes
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: 'API endpoint not found' });
     }
     res.sendFile(path.join(frontendPath, 'index.html'));
   });
 } else {
-  // Development - show API info
   app.get('/', (req, res) => {
     res.json({ 
       message: 'SoulPages API is running!',
@@ -101,9 +122,6 @@ if (isProd) {
   });
 }
 
-// ============================================
-// ERROR HANDLING (must be AFTER all routes)
-// ============================================
 app.use(notFoundHandler);
 app.use(errorHandler);
 
@@ -112,8 +130,9 @@ let server;
 async function start() {
   await initDb();
   server = app.listen(PORT, () => {
-    console.log(`📚 Book Tracker API listening on http://localhost:${PORT}`);
-    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Book Tracker API listening on http://localhost:${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`CORS Origin: ${frontendUrl}`);
   });
 }
 
