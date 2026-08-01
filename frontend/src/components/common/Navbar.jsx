@@ -28,9 +28,9 @@ export function Navbar() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-6 items-center justify-center rounded-b-sm bg-brass text-[10px] font-bold text-surface">
-              LG
-            </span>
+            {/* <span className="flex h-8 w-6 items-center justify-center rounded-b-sm bg-brass text-[10px] font-bold text-surface">
+
+            </span> */}
             <span className="font-display text-lg font-semibold tracking-tight text-ink">SoulPages</span>
           </div>
           <nav className="hidden items-center gap-6 sm:flex">
