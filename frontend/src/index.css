@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@theme {
+  /* Color tokens — a reading ledger, not a template default */
+  --color-paper: #EEF0E7;
+  --color-paper-dim: #E4E7DC;
+  --color-ink: #1E2B22;
+  --color-ink-soft: #45524A;
+  --color-muted: #6E7669;
+  --color-surface: #FFFFFF;
+  --color-line: #D8DCCE;
+  --color-brass: #C08A28;
+  --color-brass-deep: #9C6D1B;
+  --color-ribbon: #2F6F5A;
+  --color-ribbon-deep: #234F41;
+  --color-stamp-red: #B34A3C;
+
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+
+  /* Night theme: overrides the same custom properties @theme declared above.
+     Every utility class (bg-paper, text-ink, border-line, etc.) compiles to
+     var(--color-x), so redefining the variables here re-themes the whole
+     app with no JS class-swapping needed — just toggling this attribute. */
+  html[data-theme='night'] {
+    --color-paper: #1b1e1a;
+    --color-paper-dim: #242820;
+    --color-ink: #ede9df;
+    --color-ink-soft: #c6c2b3;
+    --color-muted: #8b9285;
+    --color-surface: #212520;
+    --color-line: #343a30;
+    --color-brass: #d8a746;
+    --color-brass-deep: #f0c064;
+    --color-ribbon: #55ab8f;
+    --color-ribbon-deep: #7fcab1;
+    --color-stamp-red: #dd7a6c;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  ::selection {
+    background-color: var(--color-brass);
+    color: var(--color-surface);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ribbon);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Signature element: a die-cut "catalog card" edge used on book cards */
+  .card-cut {
+    position: relative;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+  }
+
+  .card-cut::before {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 18px;
+    width: 12px;
+    height: 12px;
+    background: var(--color-paper);
+    border: 1px solid var(--color-line);
+    border-radius: 50%;
+    transform: translateY(-50%);
+  }
+
+  .ledger-rule {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent,
+      transparent 27px,
+      var(--color-line) 28px
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
