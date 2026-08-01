@@ -5,12 +5,18 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initDb, query, closeDb } from './db.js';
 import authRoutes from './routes/auth.js';
 import bookRoutes from './routes/books.js';
 import statsRoutes from './routes/stats.js';
 import quotesRoutes from './routes/quotes.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandler.js';
+
+// Get __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -60,6 +66,44 @@ app.use('/api/books', bookRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/quotes', quotesRoutes);
 
+// ============================================
+// ✅ ADD THIS: SERVE FRONTEND STATIC FILES
+// ============================================
+if (isProd) {
+  // Path to frontend build folder
+  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  console.log('📂 Serving frontend from:', frontendPath);
+  
+  // Serve static files
+  app.use(express.static(frontendPath));
+  
+  // Handle SPA routing - serve index.html for all non-API routes
+  app.get('*', (req, res) => {
+    // Don't interfere with API routes
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+} else {
+  // Development - show API info
+  app.get('/', (req, res) => {
+    res.json({ 
+      message: 'SoulPages API is running!',
+      endpoints: {
+        health: '/api/health',
+        auth: '/api/auth',
+        books: '/api/books',
+        stats: '/api/stats',
+        quotes: '/api/quotes'
+      }
+    });
+  });
+}
+
+// ============================================
+// ERROR HANDLING (must be AFTER all routes)
+// ============================================
 app.use(notFoundHandler);
 app.use(errorHandler);
 
@@ -69,6 +113,7 @@ async function start() {
   await initDb();
   server = app.listen(PORT, () => {
     console.log(`📚 Book Tracker API listening on http://localhost:${PORT}`);
+    console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }
 

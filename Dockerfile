@@ -1,26 +1,50 @@
-FROM node:20-alpine AS backend-builder
-WORKDIR /app
-COPY backend/package*.json backend/
-RUN cd backend && npm ci
-COPY backend/ backend/
+# ============================================
+# STAGE 1: Build Backend (no build needed)
+# ============================================
+FROM node:20-alpine AS backend
 
-FROM node:20-alpine AS frontend-builder  
-WORKDIR /app
-COPY frontend/package*.json frontend/
-RUN cd frontend && npm ci
-COPY frontend/ frontend/
-RUN cd frontend && npm run build  # This is fine if frontend has build script
+WORKDIR /app/backend
 
-FROM node:20-alpine
-WORKDIR /app
-# Copy backend (no build needed)
-COPY --from=backend-builder /app/backend ./backend
-# Copy frontend built files
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
-
-# Install backend production dependencies
+# Copy backend package files
 COPY backend/package*.json ./
 RUN npm ci --only=production
 
+# Copy backend source code
+COPY backend/ .
+
+# ============================================
+# STAGE 2: Build Frontend
+# ============================================
+FROM node:20-alpine AS frontend
+
+WORKDIR /app/frontend
+
+# Copy frontend package files
+COPY frontend/package*.json ./
+RUN npm ci
+
+# Copy frontend source and build
+COPY frontend/ .
+RUN npm run build
+
+# ============================================
+# STAGE 3: Final Image
+# ============================================
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy backend from backend stage
+COPY --from=backend /app/backend ./backend
+
+# Copy frontend build from frontend stage
+COPY --from=frontend /app/frontend/dist ./frontend/dist
+
+# Install any additional dependencies
+RUN npm install -g serve
+
+# Expose port (Railway will use PORT env)
 EXPOSE 5000
+
+# Start the backend (which serves frontend too)
 CMD ["node", "backend/src/index.js"]
