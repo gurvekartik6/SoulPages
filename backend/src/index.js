@@ -7,9 +7,6 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 
-import path from 'path';
-import { fileURLToPath } from 'url';
-
 import {
   initDb,
   query,
@@ -27,37 +24,11 @@ import {
 } from './middleware/errorHandler.js';
 
 
-/*
-|--------------------------------------------------------------------------
-| Paths
-|--------------------------------------------------------------------------
-*/
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-
-/*
-|--------------------------------------------------------------------------
-| App
-|--------------------------------------------------------------------------
-*/
-
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 
 const isVercel = process.env.VERCEL === '1';
-
-const isProduction =
-  process.env.NODE_ENV === 'production';
-
-
-/*
-|--------------------------------------------------------------------------
-| Frontend URL
-|--------------------------------------------------------------------------
-*/
 
 const frontendUrl =
   process.env.CORS_ORIGIN ||
@@ -66,28 +37,21 @@ const frontendUrl =
 
 /*
 |--------------------------------------------------------------------------
-| Production validation
+| Security
 |--------------------------------------------------------------------------
 */
 
 if (
-  isProduction &&
+  process.env.NODE_ENV === 'production' &&
   (!process.env.JWT_SECRET ||
     process.env.JWT_SECRET.length < 16)
 ) {
   console.error(
-    '❌ JWT_SECRET must be set to a long random string in production.'
+    '❌ JWT_SECRET must be set to a long random string.'
   );
 
   process.exit(1);
 }
-
-
-/*
-|--------------------------------------------------------------------------
-| Proxy
-|--------------------------------------------------------------------------
-*/
 
 app.set('trust proxy', 1);
 
@@ -100,46 +64,6 @@ app.set('trust proxy', 1);
 
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-
-        connectSrc: [
-          "'self'",
-          frontendUrl,
-          'https://*.vercel.app',
-          'http://localhost:5173',
-          'http://localhost:5000'
-        ],
-
-        scriptSrc: [
-          "'self'",
-          "'unsafe-inline'"
-        ],
-
-        styleSrc: [
-          "'self'",
-          "'unsafe-inline'"
-        ],
-
-        imgSrc: [
-          "'self'",
-          'data:',
-          'https:'
-        ],
-
-        fontSrc: [
-          "'self'",
-          'https:',
-          'data:'
-        ],
-
-        formAction: ["'self'"],
-
-        frameAncestors: ["'self'"]
-      }
-    },
-
     crossOriginEmbedderPolicy: false
   })
 );
@@ -147,11 +71,9 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Middleware
+| CORS
 |--------------------------------------------------------------------------
 */
-
-app.use(compression());
 
 app.use(
   cors({
@@ -159,6 +81,13 @@ app.use(
     credentials: true
   })
 );
+
+
+/*
+|--------------------------------------------------------------------------
+| Body parsing
+|--------------------------------------------------------------------------
+*/
 
 app.use(
   express.json({
@@ -172,9 +101,16 @@ app.use(
   })
 );
 
+
+/*
+|--------------------------------------------------------------------------
+| Logging
+|--------------------------------------------------------------------------
+*/
+
 app.use(
   morgan(
-    isProduction
+    process.env.NODE_ENV === 'production'
       ? 'combined'
       : 'dev'
   )
@@ -202,7 +138,6 @@ const authLimiter =
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
-
     message: {
       error:
         'Too many attempts. Please try again later.'
@@ -223,7 +158,7 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Database
+| Database initialization
 |--------------------------------------------------------------------------
 */
 
@@ -271,7 +206,7 @@ app.get(
     } catch (error) {
 
       console.error(
-        'Health check failed:',
+        '❌ Health check failed:',
         error
       );
 
@@ -317,75 +252,7 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| SERVE REACT FRONTEND
-|--------------------------------------------------------------------------
-|
-| IMPORTANT:
-|
-| frontend/dist is explicitly included in vercel.json.
-|
-|--------------------------------------------------------------------------
-*/
-
-const frontendPath =
-  path.join(
-    __dirname,
-    '../../frontend/dist'
-  );
-
-
-console.log(
-  'Frontend path:',
-  frontendPath
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| Static React files
-|--------------------------------------------------------------------------
-*/
-
-app.use(
-  express.static(frontendPath)
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| React SPA fallback
-|--------------------------------------------------------------------------
-*/
-
-app.get(
-  '*',
-  (req, res, next) => {
-
-    /*
-    | Never send index.html for an unknown API route.
-    */
-
-    if (
-      req.path.startsWith('/api/')
-    ) {
-      return next();
-    }
-
-
-    res.sendFile(
-      path.join(
-        frontendPath,
-        'index.html'
-      )
-    );
-
-  }
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| 404
+| API 404
 |--------------------------------------------------------------------------
 */
 
@@ -407,12 +274,11 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Local development
+| LOCAL DEVELOPMENT ONLY
 |--------------------------------------------------------------------------
 */
 
 let server;
-
 
 async function start() {
 
@@ -420,33 +286,28 @@ async function start() {
 
     await ensureDatabase();
 
-    server =
-      app.listen(
-        PORT,
-        () => {
+    server = app.listen(
+      PORT,
+      () => {
 
-          console.log(
-            `✅ Book Tracker running at http://localhost:${PORT}`
-          );
+        console.log(
+          `✅ Backend running at http://localhost:${PORT}`
+        );
 
-          console.log(
-            `Environment: ${
-              process.env.NODE_ENV ||
-              'development'
-            }`
-          );
+        console.log(
+          `Environment: ${
+            process.env.NODE_ENV ||
+            'development'
+          }`
+        );
 
-          console.log(
-            `CORS Origin: ${frontendUrl}`
-          );
-
-        }
-      );
+      }
+    );
 
   } catch (error) {
 
     console.error(
-      '❌ Failed to start server:',
+      '❌ Failed to start backend:',
       error
     );
 
@@ -456,12 +317,6 @@ async function start() {
 
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Shutdown
-|--------------------------------------------------------------------------
-*/
 
 async function shutdown(signal) {
 
@@ -488,7 +343,7 @@ async function shutdown(signal) {
   } catch (error) {
 
     console.error(
-      'Shutdown error:',
+      '❌ Shutdown error:',
       error
     );
 
@@ -501,7 +356,7 @@ async function shutdown(signal) {
 
 /*
 |--------------------------------------------------------------------------
-| Start local server only
+| Don't call app.listen() on Vercel
 |--------------------------------------------------------------------------
 */
 
@@ -527,7 +382,7 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Vercel export
+| Export Express app
 |--------------------------------------------------------------------------
 */
 
