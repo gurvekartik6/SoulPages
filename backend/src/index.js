@@ -7,6 +7,9 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 
+import path from 'path';
+import { fileURLToPath } from 'url';
+
 import {
   initDb,
   query,
@@ -23,20 +26,43 @@ import {
   errorHandler
 } from './middleware/errorHandler.js';
 
+
+/*
+|--------------------------------------------------------------------------
+| Paths
+|--------------------------------------------------------------------------
+*/
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+
+/*
+|--------------------------------------------------------------------------
+| App
+|--------------------------------------------------------------------------
+*/
+
 const app = express();
 
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
-const isVercel =
-  process.env.VERCEL === '1';
+const isVercel = process.env.VERCEL === '1';
 
 const isProduction =
   process.env.NODE_ENV === 'production';
 
+
+/*
+|--------------------------------------------------------------------------
+| Frontend URL
+|--------------------------------------------------------------------------
+*/
+
 const frontendUrl =
   process.env.CORS_ORIGIN ||
   'http://localhost:5173';
+
 
 /*
 |--------------------------------------------------------------------------
@@ -56,6 +82,7 @@ if (
   process.exit(1);
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Proxy
@@ -63,6 +90,7 @@ if (
 */
 
 app.set('trust proxy', 1);
+
 
 /*
 |--------------------------------------------------------------------------
@@ -116,6 +144,7 @@ app.use(
   })
 );
 
+
 /*
 |--------------------------------------------------------------------------
 | Middleware
@@ -151,9 +180,10 @@ app.use(
   )
 );
 
+
 /*
 |--------------------------------------------------------------------------
-| Rate limits
+| Rate limiting
 |--------------------------------------------------------------------------
 */
 
@@ -164,6 +194,7 @@ const generalLimiter =
     standardHeaders: true,
     legacyHeaders: false
   });
+
 
 const authLimiter =
   rateLimit({
@@ -178,6 +209,7 @@ const authLimiter =
     }
   });
 
+
 app.use(
   '/api/',
   generalLimiter
@@ -188,15 +220,17 @@ app.use(
   authLimiter
 );
 
+
 /*
 |--------------------------------------------------------------------------
-| Database initialization
+| Database
 |--------------------------------------------------------------------------
 */
 
 let dbReady = false;
 
 async function ensureDatabase() {
+
   if (dbReady) {
     return;
   }
@@ -206,16 +240,19 @@ async function ensureDatabase() {
   dbReady = true;
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Health
+| Health check
 |--------------------------------------------------------------------------
 */
 
 app.get(
   '/api/health',
   async (req, res) => {
+
     try {
+
       await ensureDatabase();
 
       await query('SELECT 1');
@@ -230,7 +267,9 @@ app.get(
         timestamp:
           new Date().toISOString()
       });
+
     } catch (error) {
+
       console.error(
         'Health check failed:',
         error
@@ -242,13 +281,16 @@ app.get(
         timestamp:
           new Date().toISOString()
       });
+
     }
+
   }
 );
 
+
 /*
 |--------------------------------------------------------------------------
-| API Routes
+| API routes
 |--------------------------------------------------------------------------
 */
 
@@ -272,92 +314,194 @@ app.use(
   quotesRoutes
 );
 
+
 /*
 |--------------------------------------------------------------------------
-| Error handling
+| SERVE REACT FRONTEND
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| frontend/dist is explicitly included in vercel.json.
+|
 |--------------------------------------------------------------------------
 */
 
-app.use(notFoundHandler);
+const frontendPath =
+  path.join(
+    __dirname,
+    '../../frontend/dist'
+  );
 
-app.use(errorHandler);
+
+console.log(
+  'Frontend path:',
+  frontendPath
+);
+
 
 /*
 |--------------------------------------------------------------------------
-| Local server
+| Static React files
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  express.static(frontendPath)
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| React SPA fallback
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  '*',
+  (req, res, next) => {
+
+    /*
+    | Never send index.html for an unknown API route.
+    */
+
+    if (
+      req.path.startsWith('/api/')
+    ) {
+      return next();
+    }
+
+
+    res.sendFile(
+      path.join(
+        frontendPath,
+        'index.html'
+      )
+    );
+
+  }
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| 404
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  notFoundHandler
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Error handler
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  errorHandler
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Local development
 |--------------------------------------------------------------------------
 */
 
 let server;
 
+
 async function start() {
+
   try {
+
     await ensureDatabase();
 
-    server = app.listen(
-      PORT,
-      () => {
-        console.log(
-          `✅ Book Tracker API running on http://localhost:${PORT}`
-        );
+    server =
+      app.listen(
+        PORT,
+        () => {
 
-        console.log(
-          `Environment: ${
-            process.env.NODE_ENV ||
-            'development'
-          }`
-        );
+          console.log(
+            `✅ Book Tracker running at http://localhost:${PORT}`
+          );
 
-        console.log(
-          `CORS Origin: ${frontendUrl}`
-        );
-      }
-    );
+          console.log(
+            `Environment: ${
+              process.env.NODE_ENV ||
+              'development'
+            }`
+          );
+
+          console.log(
+            `CORS Origin: ${frontendUrl}`
+          );
+
+        }
+      );
+
   } catch (error) {
+
     console.error(
       '❌ Failed to start server:',
       error
     );
 
     process.exit(1);
+
   }
+
 }
+
 
 /*
 |--------------------------------------------------------------------------
-| Graceful shutdown
+| Shutdown
 |--------------------------------------------------------------------------
 */
 
 async function shutdown(signal) {
+
   console.log(
     `${signal} received, shutting down...`
   );
 
   try {
+
     if (server) {
+
       await new Promise(
-        (resolve) =>
-          server.close(resolve)
+        (resolve) => {
+          server.close(resolve);
+        }
       );
+
     }
 
     await closeDb();
 
     process.exit(0);
+
   } catch (error) {
+
     console.error(
       'Shutdown error:',
       error
     );
 
     process.exit(1);
+
   }
+
 }
+
 
 /*
 |--------------------------------------------------------------------------
-| Start Express ONLY locally
+| Start local server only
 |--------------------------------------------------------------------------
 */
 
@@ -365,6 +509,7 @@ if (
   !isVercel &&
   process.env.NODE_ENV !== 'test'
 ) {
+
   start();
 
   process.on(
@@ -376,11 +521,13 @@ if (
     'SIGINT',
     () => shutdown('SIGINT')
   );
+
 }
+
 
 /*
 |--------------------------------------------------------------------------
-| Export for Vercel
+| Vercel export
 |--------------------------------------------------------------------------
 */
 
