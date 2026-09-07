@@ -1,0 +1,32 @@
+{
+  "rewrites": [
+    {
+      "source": "/register",
+      "destination": "/"
+    },
+    {
+      "source": "/login",
+      "destination": "/"
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/"
+    },
+    {
+      "source": "/books",
+      "destination": "/"
+    },
+    {
+      "source": "/commonplace",
+      "destination": "/"
+    },
+    {
+      "source": "/wrapped",
+      "destination": "/"
+    },
+    {
+      "source": "/settings",
+      "destination": "/"
+    }
+  ]
+}
