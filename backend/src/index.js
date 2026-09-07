@@ -1,4 +1,5 @@
 import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -6,7 +7,11 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 
-import { initDb, query, closeDb } from './db.js';
+import {
+  initDb,
+  query,
+  closeDb
+} from './db.js';
 
 import authRoutes from './routes/auth.js';
 import bookRoutes from './routes/books.js';
@@ -20,23 +25,29 @@ import {
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
 
-const isProd = process.env.NODE_ENV === 'production';
+const isVercel =
+  process.env.VERCEL === '1';
+
+const isProduction =
+  process.env.NODE_ENV === 'production';
 
 const frontendUrl =
   process.env.CORS_ORIGIN ||
-  'https://soul-pages-sable.vercel.app';
+  'http://localhost:5173';
 
 /*
 |--------------------------------------------------------------------------
-| Production environment validation
+| Production validation
 |--------------------------------------------------------------------------
 */
 
 if (
-  isProd &&
-  (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16)
+  isProduction &&
+  (!process.env.JWT_SECRET ||
+    process.env.JWT_SECRET.length < 16)
 ) {
   console.error(
     '❌ JWT_SECRET must be set to a long random string in production.'
@@ -47,7 +58,7 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Trust proxy
+| Proxy
 |--------------------------------------------------------------------------
 */
 
@@ -55,7 +66,7 @@ app.set('trust proxy', 1);
 
 /*
 |--------------------------------------------------------------------------
-| Security - Helmet
+| Helmet
 |--------------------------------------------------------------------------
 */
 
@@ -69,10 +80,8 @@ app.use(
           "'self'",
           frontendUrl,
           'https://*.vercel.app',
-          'https://*.railway.app',
-          'https://*.fly.dev',
-          'http://localhost:5000',
-          'http://localhost:5173'
+          'http://localhost:5173',
+          'http://localhost:5000'
         ],
 
         scriptSrc: [
@@ -136,7 +145,7 @@ app.use(
 
 app.use(
   morgan(
-    isProd
+    isProduction
       ? 'combined'
       : 'dev'
   )
@@ -144,57 +153,98 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Rate limiting
+| Rate limits
 |--------------------------------------------------------------------------
 */
 
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 300,
-  standardHeaders: true,
-  legacyHeaders: false
-});
+const generalLimiter =
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false
+  });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
+const authLimiter =
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
 
-  message: {
-    error: 'Too many attempts. Please try again later.'
-  }
-});
+    message: {
+      error:
+        'Too many attempts. Please try again later.'
+    }
+  });
 
-app.use('/api/', generalLimiter);
+app.use(
+  '/api/',
+  generalLimiter
+);
 
-app.use('/api/auth/', authLimiter);
+app.use(
+  '/api/auth/',
+  authLimiter
+);
 
 /*
 |--------------------------------------------------------------------------
-| Health check
+| Database initialization
 |--------------------------------------------------------------------------
 */
 
-app.get('/api/health', async (req, res) => {
-  try {
-    await query('SELECT 1');
+let dbReady = false;
 
-    res.status(200).json({
-      status: 'ok',
-      database: 'connected',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Health check failed:', error);
-
-    res.status(503).json({
-      status: 'degraded',
-      database: 'unreachable',
-      timestamp: new Date().toISOString()
-    });
+async function ensureDatabase() {
+  if (dbReady) {
+    return;
   }
-});
+
+  await initDb();
+
+  dbReady = true;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Health
+|--------------------------------------------------------------------------
+*/
+
+app.get(
+  '/api/health',
+  async (req, res) => {
+    try {
+      await ensureDatabase();
+
+      await query('SELECT 1');
+
+      res.status(200).json({
+        status: 'ok',
+        database: 'connected',
+        environment:
+          process.env.NODE_ENV ||
+          'development',
+        vercel: isVercel,
+        timestamp:
+          new Date().toISOString()
+      });
+    } catch (error) {
+      console.error(
+        'Health check failed:',
+        error
+      );
+
+      res.status(503).json({
+        status: 'degraded',
+        database: 'unreachable',
+        timestamp:
+          new Date().toISOString()
+      });
+    }
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -202,39 +252,39 @@ app.get('/api/health', async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-app.use('/api/auth', authRoutes);
+app.use(
+  '/api/auth',
+  authRoutes
+);
 
-app.use('/api/books', bookRoutes);
+app.use(
+  '/api/books',
+  bookRoutes
+);
 
-app.use('/api/stats', statsRoutes);
+app.use(
+  '/api/stats',
+  statsRoutes
+);
 
-app.use('/api/quotes', quotesRoutes);
+app.use(
+  '/api/quotes',
+  quotesRoutes
+);
 
 /*
 |--------------------------------------------------------------------------
-| API 404 handler
+| Error handling
 |--------------------------------------------------------------------------
 */
 
 app.use(notFoundHandler);
 
-/*
-|--------------------------------------------------------------------------
-| Global error handler
-|--------------------------------------------------------------------------
-*/
-
 app.use(errorHandler);
 
 /*
 |--------------------------------------------------------------------------
-| Local development server
-|--------------------------------------------------------------------------
-|
-| IMPORTANT:
-| Vercel imports `app` directly.
-| We only call app.listen() when running locally.
-|
+| Local server
 |--------------------------------------------------------------------------
 */
 
@@ -242,21 +292,27 @@ let server;
 
 async function start() {
   try {
-    await initDb();
+    await ensureDatabase();
 
-    server = app.listen(PORT, () => {
-      console.log(
-        `✅ Book Tracker API listening on http://localhost:${PORT}`
-      );
+    server = app.listen(
+      PORT,
+      () => {
+        console.log(
+          `✅ Book Tracker API running on http://localhost:${PORT}`
+        );
 
-      console.log(
-        `Environment: ${process.env.NODE_ENV || 'development'}`
-      );
+        console.log(
+          `Environment: ${
+            process.env.NODE_ENV ||
+            'development'
+          }`
+        );
 
-      console.log(
-        `CORS Origin: ${frontendUrl}`
-      );
-    });
+        console.log(
+          `CORS Origin: ${frontendUrl}`
+        );
+      }
+    );
   } catch (error) {
     console.error(
       '❌ Failed to start server:',
@@ -275,24 +331,23 @@ async function start() {
 
 async function shutdown(signal) {
   console.log(
-    `\n${signal} received, shutting down gracefully...`
+    `${signal} received, shutting down...`
   );
 
   try {
     if (server) {
-      await new Promise((resolve) => {
-        server.close(resolve);
-      });
+      await new Promise(
+        (resolve) =>
+          server.close(resolve)
+      );
     }
 
     await closeDb();
 
-    console.log('✅ Server shutdown complete.');
-
     process.exit(0);
   } catch (error) {
     console.error(
-      '❌ Error during shutdown:',
+      'Shutdown error:',
       error
     );
 
@@ -302,12 +357,9 @@ async function shutdown(signal) {
 
 /*
 |--------------------------------------------------------------------------
-| Start only outside Vercel production
+| Start Express ONLY locally
 |--------------------------------------------------------------------------
 */
-
-const isVercel =
-  process.env.VERCEL === '1';
 
 if (
   !isVercel &&
@@ -328,7 +380,7 @@ if (
 
 /*
 |--------------------------------------------------------------------------
-| Export Express application
+| Export for Vercel
 |--------------------------------------------------------------------------
 */
 
