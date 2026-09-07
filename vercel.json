@@ -1,32 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/register",
-      "destination": "/"
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
     },
     {
-      "source": "/login",
-      "destination": "/"
-    },
-    {
-      "source": "/dashboard",
-      "destination": "/"
-    },
-    {
-      "source": "/books",
-      "destination": "/"
-    },
-    {
-      "source": "/commonplace",
-      "destination": "/"
-    },
-    {
-      "source": "/wrapped",
-      "destination": "/"
-    },
-    {
-      "source": "/settings",
-      "destination": "/"
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
