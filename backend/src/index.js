@@ -12,6 +12,7 @@ import statsRoutes from './routes/stats.js';
 import quoteRoutes from './routes/quotes.js';
 
 import { initDb, pool } from './db.js';
+
 import {
   notFoundHandler,
   errorHandler
@@ -21,18 +22,27 @@ dotenv.config();
 
 const app = express();
 
+/* ==================================================
+   ENVIRONMENT
+================================================== */
+
 const isVercel = process.env.VERCEL === '1';
 
-/* --------------------------------------------------
-   BASIC MIDDLEWARE
--------------------------------------------------- */
+/* ==================================================
+   SECURITY & BASIC MIDDLEWARE
+================================================== */
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false
+  })
+);
+
 app.use(compression());
 
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN || '*',
     credentials: true
   })
 );
@@ -42,9 +52,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(morgan('combined'));
 
-/* --------------------------------------------------
+/* ==================================================
    RATE LIMITING
--------------------------------------------------- */
+================================================== */
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -63,9 +73,9 @@ const authLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 app.use('/api/auth/', authLimiter);
 
-/* --------------------------------------------------
+/* ==================================================
    DATABASE INITIALIZATION
--------------------------------------------------- */
+================================================== */
 
 let dbInitialized = false;
 
@@ -74,102 +84,139 @@ async function ensureDatabase() {
     return;
   }
 
-  await initDb();
-  dbInitialized = true;
+  try {
+    await initDb();
+    dbInitialized = true;
+
+    console.log('✅ Database initialized successfully');
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error);
+    throw error;
+  }
 }
 
 /*
- * Initialize the database before handling API requests.
+ * Initialize the database before processing API
+ * requests.
  *
- * This is important on Vercel because the serverless
- * function can start without the database schema having
- * been initialized yet.
+ * This is required because Vercel runs the Express
+ * application as a serverless function.
  */
 app.use('/api', async (req, res, next) => {
   try {
     await ensureDatabase();
     next();
   } catch (error) {
-    console.error('❌ Database initialization failed:', error);
+    console.error('❌ API database middleware error:', error);
 
-    res.status(503).json({
+    return res.status(503).json({
       error: 'Database unavailable'
     });
   }
 });
 
-/* --------------------------------------------------
-   ROOT / API TEST ROUTES
--------------------------------------------------- */
+/* ==================================================
+   ROOT ROUTE
+================================================== */
 
 app.get('/', (req, res) => {
-  res.json({
-    status: 'ok',
-    service: 'SoulPages API'
-  });
-});
-
-app.get('/api', (req, res) => {
-  res.json({
+  res.status(200).json({
     status: 'ok',
     service: 'SoulPages API',
     vercel: isVercel
   });
 });
 
-/* --------------------------------------------------
+/* ==================================================
+   API ROOT TEST ROUTE
+================================================== */
+
+app.get('/api', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    service: 'SoulPages API',
+    vercel: isVercel
+  });
+});
+
+/* ==================================================
    HEALTH CHECK
--------------------------------------------------- */
+================================================== */
 
 app.get('/api/health', async (req, res) => {
   try {
+    await ensureDatabase();
+
     await pool.query('SELECT 1');
 
-    res.json({
+    return res.status(200).json({
       status: 'ok',
       database: 'connected',
       vercel: isVercel
     });
   } catch (error) {
-    console.error('Health check failed:', error);
+    console.error('❌ Health check failed:', error);
 
-    res.status(503).json({
+    return res.status(503).json({
       status: 'error',
-      database: 'disconnected'
+      database: 'disconnected',
+      message: error.message
     });
   }
 });
 
-/* --------------------------------------------------
-   API ROUTES
--------------------------------------------------- */
+/* ==================================================
+   AUTH ROUTES
+================================================== */
 
 app.use('/api/auth', authRoutes);
+
+/* ==================================================
+   BOOK ROUTES
+================================================== */
+
 app.use('/api/books', bookRoutes);
+
+/* ==================================================
+   STATS ROUTES
+================================================== */
+
 app.use('/api/stats', statsRoutes);
+
+/* ==================================================
+   QUOTE ROUTES
+================================================== */
+
 app.use('/api/quotes', quoteRoutes);
 
-/* --------------------------------------------------
-   ERROR HANDLING
--------------------------------------------------- */
+/* ==================================================
+   404 HANDLER
+================================================== */
 
 app.use(notFoundHandler);
+
+/* ==================================================
+   GLOBAL ERROR HANDLER
+================================================== */
+
 app.use(errorHandler);
 
-/* --------------------------------------------------
-   LOCAL SERVER
--------------------------------------------------- */
+/* ==================================================
+   LOCAL DEVELOPMENT SERVER
+================================================== */
 
 if (!isVercel) {
   const PORT = process.env.PORT || 5000;
 
   app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🚀 SoulPages API running on port ${PORT}`);
+    console.log(`📡 API: http://localhost:${PORT}/api`);
+    console.log(`❤️ Health: http://localhost:${PORT}/api/health`);
   });
 }
 
-/* --------------------------------------------------
-   VERCEL EXPORT
--------------------------------------------------- */
+/* ==================================================
+   VERCEL SERVERLESS EXPORT
+================================================== */
 
 export default app;
